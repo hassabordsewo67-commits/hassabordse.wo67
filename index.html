@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EduPulse: Smart Adaptive Quiz Game | นวัตกรรมทางการศึกษา</title>
+  
+  <!-- โหลดฟอนต์ภาษาไทย Prompt (หัวข้อ/UI) และ Sarabun (เนื้อหาอ่านง่าย) จาก Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- โหลด Tailwind CSS สำหรับตกแต่ง UI ที่ทันสมัยและ Responsive -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            prompt: ['Prompt', 'sans-serif'],
+            sarabun: ['Sarabun', 'sans-serif'],
+          },
+          animation: {
+            'float': 'float 6s ease-in-out infinite',
+            'pop': 'pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+            'slide-up': 'slideUp 0.4s ease-out forwards',
+            'pulse-soft': 'pulseSoft 2.5s infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-12px)' },
+            },
+            pop: {
+              '0%': { transform: 'scale(0.85)', opacity: '0' },
+              '100%': { transform: 'scale(1)', opacity: '1' },
+            },
+            slideUp: {
+              '0%': { transform: 'translateY(16px)', opacity: '0' },
+              '100%': { transform: 'translateY(0)', opacity: '1' },
+            },
+            pulseSoft: {
+              '0%, 100%': { opacity: '1' },
+              '50%': { opacity: '0.7' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Sarabun', sans-serif;
+      background: radial-gradient(circle at top left, #1e1b4b, #0f172a 55%, #090d16 100%);
+      min-height: 100vh;
+      color: #1e293b;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, h4, .font-heading {
+      font-family: 'Prompt', sans-serif;
+    }
+
+    /* เอฟเฟกต์ Glassmorphism สำหรับการ์ดหลัก */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+    }
+
+    .glass-panel-dark {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    /* แอนิเมชันเมื่อตอบผิด (สั่นเบาๆ) */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: 'translateX(-6px)'; }
+      40%, 80% { transform: 'translateX(6px)'; }
+    }
+    .animate-shake {
+      animation: shake 0.4s ease-in-out;
+    }
+
+    /* ปุ่มตัวเลือกคำตอบ */
+    .option-btn {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .option-btn:not(:disabled):hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.18);
+    }
+    .option-btn:not(:disabled):active {
+      transform: translateY(0px);
+    }
+
+    /* Custom Scrollbar สำหรับ Modal คลังข้อสอบ */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-indigo-500 selection:text-white relative flex flex-col justify-between">
+
+  <!-- องค์ประกอบตกแต่งพื้นหลัง (Ambient Glowing Orbs) -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div class="absolute -top-24 -left-24 w-96 h-96 bg-indigo-600/25 rounded-full blur-3xl animate-float"></div>
+    <div class="absolute top-1/3 -right-24 w-80 h-80 bg-purple-600/20 rounded-full blur-3xl animate-float" style="animation-delay: 2s;"></div>
+    <div class="absolute -bottom-24 left-1/3 w-96 h-96 bg-cyan-500/15 rounded-full blur-3xl animate-float" style="animation-delay: 4s;"></div>
+  </div>
+
+  <!-- แถบหัวข้อด้านบน (Top Navigation Bar) -->
+  <header class="relative z-10 w-full max-w-5xl mx-auto px-4 pt-4 pb-2 flex items-center justify-between">
+    <div class="flex items-center gap-2.5 cursor-pointer" onclick="confirmReturnHome()">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+        <!-- SVG โลโก้ EduPulse -->
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <div>
+        <span class="font-heading font-bold text-white text-lg tracking-tight block leading-none">EduPulse</span>
+        <span class="text-[11px] text-indigo-300 font-medium tracking-wide">Adaptive Smart Quiz</span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- ปุ่มเปิดคลังข้อสอบสำหรับผู้สอน/กรรมการประเมิน -->
+      <button onclick="openTeacherModal()" class="px-3 py-2 rounded-xl glass-panel-dark text-indigo-200 hover:text-white hover:bg-white/15 transition text-xs sm:text-sm font-heading font-medium flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+        <span class="hidden sm:inline">คลังข้อสอบ (Teacher View)</span>
+        <span class="sm:hidden">คลังข้อสอบ</span>
+      </button>
+
+      <!-- ปุ่มเปิด/ปิดเสียง -->
+      <button id="headerSoundBtn" onclick="toggleSound()" title="เปิด/ปิดเสียงเอฟเฟกต์" class="p-2 rounded-xl glass-panel-dark text-indigo-200 hover:text-white hover:bg-white/15 transition">
+        <svg id="soundOnIcon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+        </svg>
+        <svg id="soundOffIcon" class="w-5 h-5 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- พื้นที่แสดงผลหลัก (Main Container) -->
+  <main class="relative z-10 flex-1 w-full max-w-4xl mx-auto px-4 py-4 sm:py-6 flex flex-col justify-center">
+
+    <!-- ========================================================= -->
+    <!-- หน้าจอที่ 1: หน้าเริ่มต้น (START SCREEN)                   -->
+    <!-- ========================================================= -->
+    <section id="startScreen" class="glass-card rounded-3xl p-6 sm:p-10 animate-slide-up">
+      <div class="text-center max-w-2xl mx-auto">
+        <!-- ป้ายกำกับนวัตกรรม -->
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs sm:text-sm font-heading font-semibold mb-4">
+          <span class="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+          นวัตกรรมเกมตอบคำถามปรับระดับความยากอัตโนมัติ (Adaptive Learning)
+        </div>
+
+        <h1 class="text-3xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-3">
+          EduPulse: <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600">Smart Quiz Game</span>
+        </h1>
+        
+        <p class="text-slate-600 text-base sm:text-lg leading-relaxed mb-6">
+          ต้นแบบนวัตกรรมการเรียนรู้เชิงรุกที่วิเคราะห์การตอบคำถามแบบเรียลไทม์ 
+          ปรับความยากง่ายให้เหมาะสมกับศักยภาพของผู้เรียนแต่ละบุคคล พร้อมคำใบ้และคำอธิบายเสริมความเข้าใจทันที
+        </p>
+      </div>
+
+      <!-- จุดเด่น 3 กลไกของระบบ Adaptive -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-7">
+        <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-100">
+          <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold mb-2.5 shadow-sm">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <h3 class="font-heading font-bold text-slate-800 text-sm sm:text-base mb-1">Adaptive Engine</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">เริ่มที่ระดับปานกลาง ตอบถูกต่อเนื่องเลื่อนสู่ระดับยาก ตอบผิดปรับลดระดับเพื่อปูพื้นฐาน</p>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-white border border-amber-100">
+          <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold mb-2.5 shadow-sm">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <h3 class="font-heading font-bold text-slate-800 text-sm sm:text-base mb-1">Smart Hints & Feedback</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">มีคำใบ้กระตุ้นการคิด (Scaffolding) และเฉลยอธิบายเหตุผลทันทีหลังตอบทุกข้อ</p>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-white border border-emerald-100">
+          <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold mb-2.5 shadow-sm">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h3 class="font-heading font-bold text-slate-800 text-sm sm:text-base mb-1">Learning Analytics</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">สรุปกราฟเส้นทางการเรียนรู้ วิเคราะห์จุดแข็ง-จุดอ่อนรายหัวข้อพร้อมคำแนะนำเฉพาะบุคคล</p>
+        </div>
+      </div>
+
+      <!-- ฟอร์มตั้งค่าก่อนเริ่มเล่น -->
+      <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+          <!-- ช่องกรอกชื่อผู้เรียน -->
+          <div>
+            <label for="playerNameInput" class="block text-xs font-heading font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
+              ชื่อผู้เรียน (Learner Name)
+            </label>
+            <div class="relative">
+              <input 
+                type="text" 
+                id="playerNameInput" 
+                placeholder="เช่น น้องภูผา หรือ ผู้เรียนทดสอบ" 
+                maxlength="30"
+                class="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              />
+            </div>
+          </div>
+
+          <!-- ตัวเลือกโหมดการเล่น -->
+          <div class="flex flex-col sm:flex-row gap-3 md:justify-end pt-1 md:pt-5">
+            <!-- Toggle จับเวลา -->
+            <label class="flex items-center justify-between sm:justify-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition select-none">
+              <input type="checkbox" id="timerToggle" checked class="sr-only peer" onchange="updateTimerSetting(this.checked)">
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 relative"></div>
+              <span class="text-sm font-heading font-medium text-slate-700">⏱️ โหมดจับเวลา (25 วิ)</span>
+            </label>
+
+            <!-- Toggle เสียง -->
+            <label class="flex items-center justify-between sm:justify-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition select-none">
+              <input type="checkbox" id="soundToggleStart" checked class="sr-only peer" onchange="toggleSound(this.checked)">
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 relative"></div>
+              <span class="text-sm font-heading font-medium text-slate-700">🔊 เสียงเอฟเฟกต์</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ปุ่ม Action หลัก -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <button onclick="startGame()" class="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-heading font-bold text-base sm:text-lg shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/45 transform hover:-translate-y-0.5 transition flex items-center justify-center gap-2.5">
+          <span>เริ่มทำแบบทดสอบ (Start Smart Quiz)</span>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </button>
+
+        <button onclick="openTeacherModal()" class="w-full sm:w-auto px-6 py-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-heading font-semibold text-sm sm:text-base transition flex items-center justify-center gap-2">
+          <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <span>ดูโครงสร้างคลังข้อสอบ (18 ข้อ)</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- หน้าจอที่ 2: หน้าจอเล่นเกม (QUIZ GAMEPLAY SCREEN)         -->
+    <!-- ========================================================= -->
+    <section id="quizScreen" class="hidden space-y-4">
+      
+      <!-- แถบสถานะผู้เรียนและคะแนน (HUD Bar) -->
+      <div class="glass-panel-dark rounded-2xl p-3.5 sm:px-5 text-white flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-indigo-500/30 border border-indigo-400/40 flex items-center justify-center font-heading font-bold text-indigo-200">
+            👤
+          </div>
+          <div>
+            <div id="hudPlayerName" class="font-heading font-semibold text-sm sm:text-base leading-tight">ผู้เรียนทดสอบ</div>
+            <div class="text-xs text-indigo-300">ข้อที่ <span id="hudQuestionNum" class="font-bold text-white">1</span> / 10</div>
+          </div>
+        </div>
+
+        <!-- แถบความคืบหน้า 10 ข้อ -->
+        <div class="hidden md:flex items-center gap-1.5 flex-1 max-w-xs mx-4" id="progressSegments">
+          <!-- สร้างด้วย JS -->
+        </div>
+
+        <!-- คะแนน XP และ Streak -->
+        <div class="flex items-center gap-2.5 sm:gap-4">
+          <div id="streakBadge" class="hidden px-3 py-1 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 font-heading font-bold text-xs sm:text-sm flex items-center gap-1 animate-pop">
+            <span>🔥</span>
+            <span id="hudStreak">0</span>x Combo
+          </div>
+          
+          <div class="px-3.5 py-1.5 rounded-xl bg-indigo-600/40 border border-indigo-400/40 flex items-center gap-1.5">
+            <span class="text-xs text-indigo-200 font-heading">XP</span>
+            <span id="hudScore" class="font-heading font-extrabold text-base sm:text-lg text-white">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- แถบแจ้งเตือนการปรับระดับความยากอัตโนมัติ (Adaptive Toast Banner) -->
+      <div id="adaptiveBanner" class="rounded-2xl px-4 py-3 bg-indigo-950/90 border border-indigo-400/30 text-indigo-100 text-xs sm:text-sm font-heading flex items-center gap-2.5 shadow-lg transition-all">
+        <span id="adaptiveBannerIcon" class="text-lg">🤖</span>
+        <span id="adaptiveBannerText">ระบบเริ่มต้นประเมินผลที่ <strong>ระดับปานกลาง (Lv.2)</strong> เพื่อวิเคราะห์ระดับความเข้าใจของคุณ</span>
+      </div>
+
+      <!-- การ์ดคำถามหลัก (Main Question Card) -->
+      <div id="questionCard" class="glass-card rounded-3xl p-5 sm:p-8 relative overflow-hidden">
+        
+        <!-- แถบจับเวลาด้านบนสุดของการ์ด -->
+        <div id="timerBarContainer" class="absolute top-0 left-0 right-0 h-1.5 bg-slate-100">
+          <div id="timerBarFill" class="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-1000 ease-linear" style="width: 100%;"></div>
+        </div>
+
+        <!-- ส่วนหัวข้อคำถาม: ระดับความยาก + หมวดวิชา + ตัวช่วย -->
+        <div class="flex flex-wrap items-center justify-between gap-2.5 mb-5 pt-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- ป้ายระดับความยาก (เปลี่ยนสีตาม Lv.1, Lv.2, Lv.3) -->
+            <span id="difficultyBadge" class="px-3 py-1 rounded-full text-xs sm:text-sm font-heading font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5">
+              <span>⚡ ระดับปานกลาง (Lv.2)</span>
+              <span class="text-[11px] opacity-80">+200 XP</span>
+            </span>
+
+            <!-- ป้ายหมวดหมู่ -->
+            <span id="topicBadge" class="px-3 py-1 rounded-full text-xs font-heading font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              🔬 วิทยาศาสตร์และดาราศาสตร์
+            </span>
+          </div>
+
+          <!-- ตัวเลขเวลาถอยหลัง -->
+          <div id="timerTextBadge" class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 font-heading font-bold text-xs sm:text-sm flex items-center gap-1">
+            <span>⏱️</span>
+            <span id="timerSeconds">25</span>s
+          </div>
+        </div>
+
+        <!-- ตัวคำถาม -->
+        <h2 id="questionText" class="text-lg sm:text-2xl font-bold text-slate-900 leading-snug mb-5">
+          กำลังโหลดคำถาม...
+        </h2>
+
+        <!-- ปุ่มตัวช่วยอัจฉริยะ (Smart Lifelines) -->
+        <div class="flex flex-wrap items-center gap-2.5 mb-5">
+          <button id="hintBtn" onclick="useSmartHint()" class="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-heading font-semibold text-xs sm:text-sm transition flex items-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed">
+            <span>💡 ขอคำใบ้ (Smart Hint)</span>
+            <span id="hintCountBadge" class="px-1.5 py-0.5 rounded-md bg-amber-200/80 text-amber-900 text-xs font-bold">3</span>
+          </button>
+
+          <button id="fiftyBtn" onclick="useFiftyFifty()" class="px-3.5 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 font-heading font-semibold text-xs sm:text-sm transition flex items-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed">
+            <span>✂️ ตัดตัวเลือก 50:50</span>
+            <span id="fiftyCountBadge" class="px-1.5 py-0.5 rounded-md bg-sky-200/80 text-sky-900 text-xs font-bold">2</span>
+          </button>
+        </div>
+
+        <!-- กล่องแสดงคำใบ้อัจฉริยะ (ซ่อนไว้จนกว่าผู้เรียนจะกดขอคำใบ้) -->
+        <div id="hintBox" class="hidden mb-5 p-4 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 animate-slide-up">
+          <div class="flex items-start gap-2.5">
+            <span class="text-xl mt-0.5">💡</span>
+            <div>
+              <div class="font-heading font-bold text-xs uppercase tracking-wider text-amber-700 mb-0.5">คำใบ้กระตุ้นการคิด (Smart Scaffolding Clue)</div>
+              <p id="hintText" class="text-sm sm:text-base leading-relaxed"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- รายการตัวเลือก 4 ข้อ -->
+        <div id="optionsContainer" class="grid grid-cols-1 gap-3">
+          <!-- ปุ่มตัวเลือกจะถูกสร้างผ่าน JavaScript -->
+        </div>
+
+        <!-- กล่องเฉลยและคำอธิบายทันที (Instant Smart Feedback Box) -->
+        <div id="feedbackBox" class="hidden mt-6 p-5 rounded-2xl border-2 animate-slide-up">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+            <div id="feedbackHeader" class="font-heading font-bold text-base sm:text-lg flex items-center gap-2">
+              <!-- แสดงสถานะ ถูกต้อง / ไม่ถูกต้อง -->
+            </div>
+            <span id="xpEarnedBadge" class="inline-block px-3 py-1 rounded-full text-xs font-heading font-bold">
+              +200 XP
+            </span>
+          </div>
+
+          <p id="explanationText" class="text-slate-700 text-sm sm:text-base leading-relaxed mb-4">
+            คำอธิบายเฉลย...
+          </p>
+
+          <!-- สรุปการปรับระดับความยากข้อถัดไป -->
+          <div id="nextStepHint" class="p-3 rounded-xl bg-white/80 border border-slate-200/80 text-xs sm:text-sm font-heading font-medium text-slate-700 mb-4 flex items-center gap-2">
+            <!-- แสดงผลจาก Adaptive Engine -->
+          </div>
+
+          <div class="flex justify-end">
+            <button id="nextQuestionBtn" onclick="nextQuestion()" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-heading font-bold text-sm sm:text-base shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2">
+              <span id="nextBtnLabel">ข้อถัดไป (Next Question)</span>
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- หน้าจอที่ 3: หน้าสรุปผลวิเคราะห์การเรียนรู้ (ANALYTICS)     -->
+    <!-- ========================================================= -->
+    <section id="resultScreen" class="hidden glass-card rounded-3xl p-6 sm:p-9 animate-slide-up space-y-6">
+      
+      <!-- ส่วนหัวรายงานผลการเรียนรู้ -->
+      <div class="text-center border-b border-slate-200 pb-6">
+        <div id="rankBadge" class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-100 text-indigo-800 font-heading font-bold text-xs sm:text-sm mb-3">
+          🏆 ระดับผลการเรียนรู้: ยอดเยี่ยม
+        </div>
+        <h2 class="text-2xl sm:text-4xl font-extrabold text-slate-900 mb-1.5">
+          รายงานวิเคราะห์การเรียนรู้รายบุคคล
+        </h2>
+        <p class="text-slate-600 text-sm sm:text-base">
+          ผู้เรียน: <span id="resultPlayerName" class="font-bold text-indigo-700">ผู้เรียนทดสอบ</span> • วิเคราะห์ข้อมูลจากระบบ Adaptive Smart Quiz
+        </p>
+      </div>
+
+      <!-- การ์ดตัวชี้วัด 4 ด้าน (KPI Cards) -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-center">
+          <div class="text-xs font-heading font-semibold text-indigo-600 uppercase mb-1">คะแนนสะสมรวม</div>
+          <div id="statTotalXP" class="text-2xl sm:text-3xl font-heading font-extrabold text-indigo-950">0 XP</div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-center">
+          <div class="text-xs font-heading font-semibold text-emerald-600 uppercase mb-1">ความแม่นยำ</div>
+          <div id="statAccuracy" class="text-2xl sm:text-3xl font-heading font-extrabold text-emerald-950">0%</div>
+          <div id="statCorrectFraction" class="text-xs text-emerald-700 mt-0.5">ถูก 0/10 ข้อ</div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-amber-50 border border-amber-100 text-center">
+          <div class="text-xs font-heading font-semibold text-amber-600 uppercase mb-1">คอมโบสูงสุด</div>
+          <div id="statMaxStreak" class="text-2xl sm:text-3xl font-heading font-extrabold text-amber-950">0 ข้อ</div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-purple-50 border border-purple-100 text-center">
+          <div class="text-xs font-heading font-semibold text-purple-600 uppercase mb-1">การใช้คำใบ้</div>
+          <div id="statHintsUsed" class="text-2xl sm:text-3xl font-heading font-extrabold text-purple-950">0 / 3</div>
+        </div>
+      </div>
+
+      <!-- กราฟเส้นทางการปรับระดับความยากอัตโนมัติ (Adaptive Trajectory Chart) -->
+      <div class="p-4 sm:p-6 rounded-2xl bg-slate-50 border border-slate-200">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <div>
+            <h3 class="font-heading font-bold text-slate-900 text-base sm:text-lg">
+              📈 กราฟเส้นทางการปรับระดับความยาก (Adaptive Difficulty Trajectory)
+            </h3>
+            <p class="text-xs text-slate-500">แตะหรือชี้ที่จุดแต่ละข้อเพื่อดูรายละเอียดระดับความยากและผลการตอบ</p>
+          </div>
+          <div class="flex items-center gap-3 text-xs font-heading">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> ตอบถูก</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> ตอบผิด</span>
+          </div>
+        </div>
+
+        <!-- พื้นที่วาด SVG Chart -->
+        <div class="w-full overflow-x-auto">
+          <svg id="trajectorySvg" viewBox="0 0 640 210" class="w-full min-w-[480px] h-auto select-none">
+            <!-- วาดผ่าน JavaScript -->
+          </svg>
+        </div>
+
+        <!-- กล่องแสดงรายละเอียดเมื่อคลิก/โฮเวอร์จุดบนกราฟ -->
+        <div id="chartNodeDetail" class="mt-3 p-3 rounded-xl bg-white border border-slate-200 text-xs sm:text-sm text-slate-700 flex items-center justify-between">
+          <span>คลิกที่หมายเลขข้อ (1–10) บนกราฟเพื่อดูประวัติการปรับระดับความยากรายข้อ</span>
+        </div>
+      </div>
+
+      <!-- การวิเคราะห์จุดแข็ง-จุดอ่อนรายหัวข้อ + คำแนะนำ AI -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- ความเชี่ยวชาญรายหัวข้อ -->
+        <div class="p-5 rounded-2xl bg-white border border-slate-200">
+          <h3 class="font-heading font-bold text-slate-900 text-base sm:text-lg mb-4 flex items-center gap-2">
+            <span>🎯 วิเคราะห์ความเข้าใจรายสาระการเรียนรู้</span>
+          </h3>
+          <div id="topicMasteryList" class="space-y-4">
+            <!-- สร้างด้วย JS -->
+          </div>
+        </div>
+
+        <!-- คำแนะนำการทบทวนรายบุคคล -->
+        <div class="p-5 rounded-2xl bg-gradient-to-br from-indigo-50 via-purple-50 to-white border border-indigo-200 flex flex-col justify-between">
+          <div>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-xs font-heading font-bold mb-3">
+              <span>🤖 AI Personalized Feedback</span>
+            </div>
+            <h3 class="font-heading font-bold text-slate-900 text-base sm:text-lg mb-2">
+              คำแนะนำเพื่อพัฒนาการเรียนรู้เฉพาะบุคคล
+            </h3>
+            <div id="aiRecommendationText" class="text-sm text-slate-700 leading-relaxed space-y-2">
+              <!-- สร้างด้วย JS -->
+            </div>
+          </div>
+          
+          <div class="mt-4 pt-3 border-t border-indigo-200/60 text-xs text-indigo-700 font-medium">
+            * ข้อมูลนี้สามารถนำไปใช้ประกอบการวางแผนสอนซ่อมเสริม (Remedial Teaching) ของผู้สอนได้
+          </div>
+        </div>
+      </div>
+
+      <!-- ปุ่มดำเนินการหลังจบเกม -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+        <button onclick="startGame()" class="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-heading font-bold text-base shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>เล่นอีกครั้ง (Play Again)</span>
+        </button>
+
+        <button onclick="openTeacherModal()" class="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-heading font-semibold text-sm sm:text-base transition flex items-center justify-center gap-2">
+          <span>📚 ดูคลังข้อสอบทั้งหมด (Teacher View)</span>
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ฟุตเตอร์แสดงข้อมูลนวัตกรรม -->
+  <footer class="relative z-10 text-center py-4 px-4 text-xs text-indigo-300/75 font-heading">
+    EduPulse Prototype • มินิโปรเจกต์นวัตกรรมทางการศึกษา (Adaptive Learning & Gamification)
+  </footer>
+
+  <!-- ========================================================= -->
+  <!-- MODAL: โครงสร้างคลังข้อสอบ 3 ระดับความยาก (TEACHER VIEW)     -->
+  <!-- ========================================================= -->
+  <div id="teacherModal" class="fixed inset-0 z-50 hidden bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-4xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-pop">
+      <!-- หัว Modal -->
+      <div class="p-5 sm:p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div>
+          <span class="text-xs font-heading font-bold text-indigo-600 uppercase tracking-wider">Teacher & Evaluator Dashboard</span>
+          <h3 class="text-xl sm:text-2xl font-heading font-extrabold text-slate-900">โครงสร้างคลังข้อสอบ 3 ระดับความยาก (18 ข้อ)</h3>
+        </div>
+        <button onclick="closeTeacherModal()" class="p-2 rounded-xl bg-slate-200/70 hover:bg-slate-300 text-slate-700 transition">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- แถบตัวกรองระดับความยาก -->
+      <div class="px-5 py-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap gap-1.5" id="modalFilterTabs">
+          <button onclick="renderTeacherBank('all')" data-filter="all" class="filter-tab px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-heading font-semibold bg-indigo-600 text-white">
+            ทั้งหมด (18 ข้อ)
+          </button>
+          <button onclick="renderTeacherBank(1)" data-filter="1" class="filter-tab px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-heading font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">
+            🌱 ระดับง่าย Lv.1 (6)
+          </button>
+          <button onclick="renderTeacherBank(2)" data-filter="2" class="filter-tab px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-heading font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">
+            ⚡ ระดับปานกลาง Lv.2 (6)
+          </button>
+          <button onclick="renderTeacherBank(3)" data-filter="3" class="filter-tab px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-heading font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">
+            🔥 ระดับยาก Lv.3 (6)
+          </button>
+        </div>
+        <span class="text-xs text-slate-500">ครอบคลุม 3 สาระการเรียนรู้</span>
+      </div>
+
+      <!-- รายการข้อสอบทั้งหมด -->
+      <div id="teacherBankList" class="p-5 overflow-y-auto space-y-3.5 flex-1 bg-slate-50/50">
+        <!-- สร้างผ่าน JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MODAL: ยืนยันการกลับหน้าหลัก (แทนการใช้ confirm() ของเบราว์เซอร์) -->
+  <!-- ========================================================= -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-md p-6 text-center shadow-2xl animate-pop">
+      <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3 text-2xl">
+        ⚠️
+      </div>
+      <h3 class="font-heading font-bold text-lg text-slate-900 mb-1.5">กลับสู่หน้าเริ่มต้นใช่หรือไม่?</h3>
+      <p class="text-sm text-slate-600 mb-5">ความคืบหน้าและคะแนนในรอบปัจจุบันจะไม่ถูกบันทึก</p>
+      <div class="flex gap-3">
+        <button onclick="closeConfirmModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-heading font-semibold text-sm transition">
+          เล่นต่อ
+        </button>
+        <button onclick="goHomeNow()" class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-heading font-semibold text-sm transition">
+          กลับหน้าหลัก
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- JAVASCRIPT: ระบบเสียง, คลังข้อสอบ, และ ADAPTIVE ENGINE     -->
+  <!-- ========================================================= -->
+  <script>
+    /**
+     * 1. ระบบเสียงสังเคราะห์ (Web Audio API Sound Synthesizer)
+     * สร้างเสียงประกอบเกมโดยไม่ต้องพึ่งพาไฟล์ MP3 ภายนอก
+     */
+    class SoundEngine {
+      constructor() {
+        this.enabled = true;
+        this.ctx = null;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playTone(freq, type = 'sine', duration = 0.15, delay = 0, gainVal = 0.12) {
+        if (!this.enabled) return;
+        try {
+          this.init();
+          if (!this.ctx) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
+
+          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(this.ctx.currentTime + delay);
+          osc.stop(this.ctx.currentTime + delay + duration);
+        } catch (e) {
+          // ข้ามหากเบราว์เซอร์บล็อกเสียงก่อนการโต้ตอบ
+        }
+      }
+
+      click() {
+        this.playTone(520, 'sine', 0.08, 0, 0.08);
+      }
+
+      hint() {
+        this.playTone(880, 'sine', 0.14, 0, 0.1);
+        this.playTone(1174.66, 'triangle', 0.22, 0.09, 0.1);
+      }
+
+      correct() {
+        this.playTone(523.25, 'triangle', 0.14, 0, 0.13);    // C5
+        this.playTone(659.25, 'triangle', 0.14, 0.09, 0.13); // E5
+        this.playTone(783.99, 'triangle', 0.24, 0.18, 0.14); // G5
+      }
+
+      levelUp() {
+        this.playTone(523.25, 'triangle', 0.12, 0, 0.13);    // C5
+        this.playTone(659.25, 'triangle', 0.12, 0.08, 0.13); // E5
+        this.playTone(783.99, 'triangle', 0.12, 0.16, 0.13); // G5
+        this.playTone(1046.5, 'sine', 0.32, 0.24, 0.16);     // C6
+      }
+
+      wrong() {
+        this.playTone(329.63, 'sine', 0.18, 0, 0.12);        // E4
+        this.playTone(261.63, 'sine', 0.28, 0.14, 0.12);     // C4
+      }
+
+      finish() {
+        this.playTone(523.25, 'triangle', 0.16, 0, 0.14);
+        this.playTone(659.25, 'triangle', 0.16, 0.12, 0.14);
+        this.playTone(783.99, 'triangle', 0.16, 0.24, 0.14);
+        this.playTone(1046.5, 'triangle', 0.45, 0.36, 0.16);
+      }
+    }
+
+    const sfx = new SoundEngine();
+
+    /**
+     * 2. คลังข้อสอบอัจฉริยะ 18 ข้อ (แบ่งเป็น 3 ระดับความยาก x 3 สาระการเรียนรู้)
+     * difficulty: 1 = ระดับง่าย (Easy), 2 = ระดับปานกลาง (Medium), 3 = ระดับยาก (Hard)
+     */
+    const QUESTION_BANK = [
+      // ================= ระดับง่าย (Lv.1 - Easy) 6 ข้อ =================
+      {
+        id: 'E1',
+        topic: 'วิทยาศาสตร์และดาราศาสตร์',
+        difficulty: 1,
+        question: 'ดาวเคราะห์ดวงใดในระบบสุริยะที่มีขนาดใหญ่ที่สุด และมีจุดแดงใหญ่เป็นพายุหมุนยักษ์?',
+        options: ['ดาวเสาร์', 'ดาวพฤหัสบดี', 'ดาวยูเรนัส', 'ดาวอังคาร'],
+        correctIndex: 1,
+        hint: 'เป็นดาวเคราะห์แก๊สยักษ์ลำดับที่ 5 ถัดจากดาวอังคาร และมีดวงจันทร์บริวารอย่างยูโรปาและแกนีมีด',
+        explanation: 'ดาวพฤหัสบดี (Jupiter) เป็นดาวเคราะห์ที่ใหญ่ที่สุดในระบบสุริยะ มีมวลมากกว่าโลกถึง 318 เท่า และมีเอกลักษณ์คือ "จุดแดงใหญ่" ซึ่งเป็นพายุหมุนขนาดมหึมา'
+      },
+      {
+        id: 'E2',
+        topic: 'วิทยาศาสตร์และดาราศาสตร์',
+        difficulty: 1,
+        question: 'ปรากฏการณ์ใดที่ทำให้เกิด "กลางวันและกลางคืน" บนโลกของเรา?',
+        options: ['การโคจรของโลกรอบดวงอาทิตย์', 'การหมุนรอบตัวเองของโลก', 'การโคจรของดวงจันทร์รอบโลก', 'การเอียงของแกนโลก 23.5 องศา'],
+        correctIndex: 1,
+        hint: 'ลองนึกถึงการเปลี่ยนแปลงที่เกิดขึ้นทุก ๆ 24 ชั่วโมง เมื่อด้านหนึ่งของโลกหันเข้าหาดวงอาทิตย์',
+        explanation: 'โลกหมุนรอบตัวเองจากทิศตะวันตกไปยังทิศตะวันออกใช้เวลาประมาณ 24 ชั่วโมง ทำให้ด้านที่หันรับแสงอาทิตย์เป็นกลางวัน และด้านตรงข้ามเป็นกลางคืน'
+      },
+      {
+        id: 'E3',
+        topic: 'เทคโนโลยีดิจิทัลและ AI',
+        difficulty: 1,
+        question: 'ข้อใดคือตัวอย่างการทำงานของปัญญาประดิษฐ์ (AI) ที่พบเห็นได้บ่อยในชีวิตประจำวัน?',
+        options: ['เครื่องคิดเลขแบบกดปุ่มพื้นฐาน', 'ระบบแนะนำวิดีโอหรือเพลงตามความสนใจของผู้ใช้', 'หลอดไฟที่เปิด-ปิดด้วยสวิตช์มือ', 'แฟลชไดรฟ์สำหรับบันทึกไฟล์งาน'],
+        correctIndex: 1,
+        hint: 'ระบบนี้จะเรียนรู้จากประวัติการรับชมและพฤติกรรมของคุณ เพื่อคาดเดาสิ่งที่คุณน่าจะชอบในครั้งถัดไป',
+        explanation: 'ระบบแนะนำเนื้อหา (Recommendation System) บนแพลตฟอร์มอย่าง YouTube หรือ Spotify ใช้ AI วิเคราะห์รูปแบบพฤติกรรมผู้ใช้เพื่อคัดสรรเนื้อหาที่ตรงใจ'
+      },
+      {
+        id: 'E4',
+        topic: 'เทคโนโลยีดิจิทัลและ AI',
+        difficulty: 1,
+        question: 'พฤติกรรมใดช่วยป้องกันการถูกหลอกขโมยรหัสผ่านออนไลน์ (Phishing) ได้ดีที่สุด?',
+        options: ['ตั้งรหัสผ่านให้สั้นและจำง่ายเหมือนกันทุกเว็บ', 'คลิกลิงก์แจ้งเตือนรางวัลจากอีเมลแปลกหน้าทันที', 'ตรวจสอบชื่อเว็บไซต์ (URL) ให้ถูกต้องและเปิดใช้การยืนยันตัวตน 2 ชั้น', 'บันทึกรหัสผ่านไว้ในคอมพิวเตอร์สาธารณะ'],
+        correctIndex: 2,
+        hint: 'นอกจากรหัสผ่านแล้ว การมีรหัส OTP ส่งเข้ามือถืออีกชั้นหนึ่งจะช่วยป้องกันแฮกเกอร์ได้มาก',
+        explanation: 'การตรวจสอบ URL ป้องกันเว็บปลอม และเปิดใช้งาน Two-Factor Authentication (2FA) ช่วยเพิ่มเกราะป้องกันบัญชีแม้ว่ารหัสผ่านหลักจะรั่วไหล'
+      },
+      {
+        id: 'E5',
+        topic: 'สิ่งแวดล้อมและชีววิทยา',
+        difficulty: 1,
+        question: 'กระบวนการสร้างอาหารของพืชสีเขียวโดยอาศัยพลังงานแสง แก๊สคาร์บอนไดออกไซด์ และน้ำ เรียกว่าอะไร?',
+        options: ['การหายใจระดับเซลล์', 'การคายน้ำ', 'การสังเคราะห์ด้วยแสง', 'การลำเลียงแร่ธาตุ'],
+        correctIndex: 2,
+        hint: 'กระบวนการนี้เกิดขึ้นที่คลอโรพลาสต์ในใบพืช และปล่อยแก๊สออกซิเจนออกมาเป็นผลพลอยได้',
+        explanation: 'การสังเคราะห์ด้วยแสง (Photosynthesis) คือกระบวนการที่คลอโรฟิลล์ในพืชเปลี่ยนพลังงานแสงเป็นพลังงานเคมีในรูปน้ำตาลกลูโคส และปล่อยแก๊สออกซิเจน'
+      },
+      {
+        id: 'E6',
+        topic: 'สิ่งแวดล้อมและชีววิทยา',
+        difficulty: 1,
+        question: 'แก๊สเรือนกระจกชนิดใดที่ถูกปล่อยออกจากกิจกรรมของมนุษย์มากที่สุดและเป็นตัวการสำคัญของภาวะโลกร้อน?',
+        options: ['แก๊สออกซิเจน', 'แก๊สไนโตรเจน', 'แก๊สคาร์บอนไดออกไซด์', 'แก๊สฮีเลียม'],
+        correctIndex: 2,
+        hint: 'แก๊สนี้เกิดจากการเผาไหม้เชื้อเพลิงฟอสซิล เช่น น้ำมัน ถ่านหิน และก๊าซธรรมชาติ',
+        explanation: 'แก๊สคาร์บอนไดออกไซด์ (CO₂) จากการคมนาคมและอุตสาหกรรมกักเก็บความร้อนในชั้นบรรยากาศ ทำให้อุณหภูมิเฉลี่ยของโลกสูงขึ้นอย่างต่อเนื่อง'
+      },
+
+      // ================= ระดับปานกลาง (Lv.2 - Medium) 6 ข้อ =================
+      {
+        id: 'M1',
+        topic: 'วิทยาศาสตร์และดาราศาสตร์',
+        difficulty: 2,
+        question: 'เหตุใดเราจึงมองเห็นดวงจันทร์ส่องสว่างในเวลากลางคืน ทั้งที่ดวงจันทร์ไม่ได้เป็นดาวฤกษ์?',
+        options: ['ดวงจันทร์มีปฏิกิริยานิวเคลียร์ฟิวชันขนาดเล็ก', 'ดวงจันทร์สะท้อนแสงจากดวงอาทิตย์มายังโลก', 'ชั้นบรรยากาศโลกหักเหแสงไปกระทบดวงจันทร์', 'แร่ธาตุบนดวงจันทร์เรืองแสงได้เองในความมืด'],
+        correctIndex: 1,
+        hint: 'ดวงจันทร์เป็นบริวารที่ไม่มีแสงสว่างในตัวเอง แต่พื้นผิวหินและฝุ่นของมันทำหน้าที่คล้ายกระจกบานใหญ่',
+        explanation: 'ดวงจันทร์เป็นดาวบริวารที่ไม่มีแสงในตัวเอง เราเห็นดวงจันทร์สว่างเพราะพื้นผิวดวงจันทร์สะท้อนแสงอาทิตย์มายังโลกในมุมต่าง ๆ ตามการโคจร'
+      },
+      {
+        id: 'M2',
+        topic: 'วิทยาศาสตร์และดาราศาสตร์',
+        difficulty: 2,
+        question: 'ชั้นบรรยากาศของโลกชั้นใดที่มีแก๊สโอโซนหนาแน่น ช่วยดูดซับรังสีอัลตราไวโอเลต (UV) ที่เป็นอันตราย?',
+        options: ['โทรโพสเฟียร์ (Troposphere)', 'สตราโตสเฟียร์ (Stratosphere)', 'มีโซสเฟียร์ (Mesosphere)', 'เอกโซสเฟียร์ (Exosphere)'],
+        correctIndex: 1,
+        hint: 'เป็นชั้นบรรยากาศลำดับที่ 2 ถัดจากชั้นที่เกิดเมฆและฝน และเครื่องบินไอพ่นมักบินในระดับล่างของชั้นนี้',
+        explanation: 'ชั้นสตราโตสเฟียร์ (Stratosphere) ที่ความสูงประมาณ 15–50 กม. มีชั้นโอโซน (Ozone Layer) คอยกรองรังสี UV จากดวงอาทิตย์ไม่ให้ทำลายสิ่งมีชีวิตบนโลก'
+      },
+      {
+        id: 'M3',
+        topic: 'เทคโนโลยีดิจิทัลและ AI',
+        difficulty: 2,
+        question: 'เทคโนโลยี "Cloud Computing" มีจุดเด่นสำคัญอย่างไรต่อการเรียนรู้และการทำงานยุคดิจิทัล?',
+        options: ['ทำให้คอมพิวเตอร์ทำงานได้โดยไม่ต้องใช้อินเทอร์เน็ต', 'เข้าถึง แก้ไข และทำงานร่วมกันบนข้อมูลได้ทุกที่ผ่านอินเทอร์เน็ต', 'เพิ่มความเร็วของหน้าจอแสดงผลให้คมชัดขึ้น', 'ป้องกันไวรัสคอมพิวเตอร์ได้ 100% โดยไม่ต้องอัปเดต'],
+        correctIndex: 1,
+        hint: 'ลองนึกถึงการใช้งาน Google Docs หรือ OneDrive ที่สามารถเปิดไฟล์จากมือถือหรือคอมพิวเตอร์เครื่องใดก็ได้',
+        explanation: 'Cloud Computing ช่วยให้ผู้ใช้จัดเก็บและประมวลผลข้อมูลบนเซิร์ฟเวอร์ระยะไกลผ่านอินเทอร์เน็ต ทำให้ทำงานร่วมกันแบบเรียลไทม์ได้จากทุกอุปกรณ์'
+      },
+      {
+        id: 'M4',
+        topic: 'เทคโนโลยีดิจิทัลและ AI',
+        difficulty: 2,
+        question: 'การฝึกสอนโมเดล AI แยกแยะภาพ "แมว" กับ "สุนัข" โดยใช้ชุดภาพที่มีป้ายกำกับเฉลย (Label) ไว้ล่วงหน้า เรียกว่าอะไร?',
+        options: ['Supervised Learning (การเรียนรู้แบบมีผู้สอน)', 'Unsupervised Learning (การเรียนรู้แบบไม่มีผู้สอน)', 'Reinforcement Learning (การเรียนรู้แบบเสริมกำลัง)', 'Quantum Computing (การประมวลผลควอนตัม)'],
+        correctIndex: 0,
+        hint: 'คำศัพท์นี้มีความหมายตรงตัวว่ามี "ผู้สอน" คอยป้อนข้อมูลตัวอย่างพร้อมคำตอบที่ถูกต้องให้โมเดลเรียนรู้',
+        explanation: 'Supervised Learning คือการสอน AI ด้วยข้อมูลที่มีเฉลยกำกับ (Labeled Data) เพื่อให้โมเดลเรียนรู้ความสัมพันธ์และนำไปทำนายข้อมูลใหม่ได้'
+      },
+      {
+        id: 'M5',
+        topic: 'สิ่งแวดล้อมและชีววิทยา',
+        difficulty: 2,
+        question: 'ในระบบนิเวศ สิ่งมีชีวิตกลุ่มใดทำหน้าที่ย่อยสลายซากพืชซากสัตว์ให้กลับคืนเป็นแร่ธาตุอาหารในดิน?',
+        options: ['ผู้ผลิต (Producers)', 'ผู้บริโภคปฐมภูมิ (Primary Consumers)', 'ผู้ย่อยสลายสารอินทรีย์ (Decomposers)', 'ผู้ล่าสูงสุด (Apex Predators)'],
+        correctIndex: 2,
+        hint: 'ตัวอย่างของสิ่งมีชีวิตกลุ่มนี้ ได้แก่ เห็ด รา และแบคทีเรียบางชนิด',
+        explanation: 'ผู้ย่อยสลายสารอินทรีย์ (Decomposers) เช่น เห็ด รา และแบคทีเรีย จะหลั่งเอนไซม์ออกมาย่อยซากสิ่งมีชีวิต ทำให้เกิดการหมุนเวียนสารอาหารในระบบนิเวศ'
+      },
+      {
+        id: 'M6',
+        topic: 'สิ่งแวดล้อมและชีววิทยา',
+        difficulty: 2,
+        question: 'ปรากฏการณ์ "ปะการังฟอกขาว" (Coral Bleaching) มีสาเหตุสำคัญมาจากปัจจัยใด?',
+        options: ['น้ำทะเลมีอุณหภูมิเย็นจัดเกินไป', 'อุณหภูมิของน้ำทะเลสูงขึ้น จนปะการังขับสาหร่ายขนาดเล็กออกไป', 'ปริมาณออกซิเจนในทะเลเพิ่มขึ้นอย่างรวดเร็ว', 'แสงแดดส่องลงไปไม่ถึงแนวปะการังน้ำตื้น'],
+        correctIndex: 1,
+        hint: 'สีสันของปะการังเกิดจากสาหร่ายซูแซนเทลลีที่อาศัยอยู่ร่วมกัน เมื่อน้ำทะเลร้อนขึ้น ปะการังจะเกิดความเครียด',
+        explanation: 'เมื่ออุณหภูมิน้ำทะเลสูงขึ้นผิดปกติ ปะการังจะขับสาหร่ายซูแซนเทลลี (Zooxanthellae) ที่ช่วยสังเคราะห์อาหารและให้สีสันออกไป ทำให้เห็นโครงสร้างหินปูนสีขาว'
+      },
+
+      // ================= ระดับยาก (Lv.3 - Hard) 6 ข้อ =================
+      {
+        id: 'H1',
+        topic: 'วิทยาศาสตร์และดาราศาสตร์',
+        difficulty: 3,
+        question: 'เมื่อดาวฤกษ์ที่มีมวลมากกว่าดวงอาทิตย์หลายสิบเท่าสิ้นอายุขัยและระเบิดเป็นซูเปอร์โนวา แก่นกลางที่ยุบตัวลงอาจกลายเป็นวัตถุใด?',
+        options: ['ดาวแคระขาว (White Dwarf)', 'หลุมดำ (Black Hole) หรือ ดาวนิวตรอน', 'ดาวเคราะห์น้อย (Asteroid)', 'ดาวหางคาบสั้น (Short-period Comet)'],
+        correctIndex: 1,
+        hint: 'แรงโน้มถ่วงของวัตถุนี้รุนแรงมหาศาล จนแม้แต่แสงก็ไม่สามารถหลุดพ้นออกมาได้หากมวลแก่นกลางสูงเกินขีดจำกัด',
+        explanation: 'ดาวฤกษ์มวลมากหลังเกิดซูเปอร์โนวาจะยุบตัวกลายเป็น "ดาวนิวตรอน" หรือหากมวลแก่นกลางมากกว่า ~3 เท่าของดวงอาทิตย์ จะยุบตัวเป็น "หลุมดำ" (Black Hole)'
+      },
+      {
+        id: 'H2',
+        topic: 'วิทยาศาสตร์และดาราศาสตร์',
+        difficulty: 3,
+        question: 'ปรากฏการณ์ "Redshift" (การเลื่อนไปทางแดง) ของสเปกตรัมแสงจากกาแล็กซีห่างไกล เป็นหลักฐานสำคัญที่สนับสนุนแนวคิดใด?',
+        options: ['กาแล็กซีทั้งหมดกำลังเคลื่อนที่เข้าชนกัน', 'เอกภพกำลังขยายตัวออกและสนับสนุนทฤษฎีบิกแบง', 'ดวงอาทิตย์กำลังเย็นตัวลงอย่างรวดเร็ว', 'แสงเดินทางเร็วขึ้นเมื่อผ่านสุญญากาศ'],
+        correctIndex: 1,
+        hint: 'คล้ายปรากฏการณ์ดอปเพลอร์ของเสียง เมื่อวัตถุเคลื่อนที่ห่างออกไป ความยาวคลื่นแสงจะยืดออกสู่ช่วงสีแดง',
+        explanation: 'เอ็ดวิน ฮับเบิล ค้นพบว่าแสงจากกาแล็กซีไกลโพ้นมีการเลื่อนไปทางแดง (Redshift) แสดงว่ากาแล็กซีกำลังเคลื่อนที่ห่างออกจากกัน พิสูจน์ว่าเอกภพกำลังขยายตัว'
+      },
+      {
+        id: 'H3',
+        topic: 'เทคโนโลยีดิจิทัลและ AI',
+        difficulty: 3,
+        question: 'อาการ "AI Hallucination" ในโมเดลภาษาขนาดใหญ่ (LLM) หมายถึงปรากฏการณ์ใด?',
+        options: ['การที่ AI ประมวลผลช้าลงเมื่อมีผู้ใช้งานพร้อมกันจำนวนมาก', 'การที่ AI สร้างคำตอบที่ดูน่าเชื่อถือแต่ไม่ตรงข้อเท็จจริงหรือแต่งข้อมูลขึ้นมาเอง', 'การที่ระบบ AI ติดไวรัสและลบฐานข้อมูลทั้งหมด', 'การที่ AI ปฏิเสธการตอบคำถามที่ซับซ้อนทุกกรณี'],
+        correctIndex: 1,
+        hint: 'คำว่า Hallucination แปลว่า "อาการหลอน" ซึ่งเกิดจากการที่โมเดลคาดเดาคำถัดไปตามความน่าจะเป็นโดยไม่มีข้อมูลยืนยันจริง',
+        explanation: 'AI Hallucination คือภาวะที่ Generative AI สร้างข้อมูลเท็จหรืออ้างอิงแหล่งที่มาที่ไม่มีอยู่จริงด้วยภาษาที่มั่นใจ ผู้เรียนจึงต้องตรวจสอบความถูกต้องเสมอ'
+      },
+      {
+        id: 'H4',
+        topic: 'เทคโนโลยีดิจิทัลและ AI',
+        difficulty: 3,
+        question: 'กลไกหลักของเทคโนโลยี "Blockchain" ที่ทำให้ข้อมูลธุรกรรมย้อนหลังถูกแก้ไขปลอมแปลงได้ยากมากคือข้อใด?',
+        options: ['การเก็บข้อมูลทั้งหมดไว้ในซูเปอร์คอมพิวเตอร์เครื่องเดียวของรัฐบาล', 'การเชื่อมโยงแต่ละบล็อกด้วยค่าแฮช (Cryptographic Hash) และกระจายสำเนาในเครือข่าย', 'การซ่อนรหัสผ่านไว้ในไฟล์รูปภาพ', 'การลบประวัติธุรกรรมทุก ๆ 24 ชั่วโมง'],
+        correctIndex: 1,
+        hint: 'หากมีใครแก้ข้อมูลในบล็อกเก่า ค่าแฮชจะเปลี่ยนทันที ทำให้โซ่ที่เชื่อมกับบล็อกถัดไปขาดและถูกเครือข่ายปฏิเสธ',
+        explanation: 'Blockchain ใช้การเข้ารหัสแบบแฮชเชื่อมโยงบล็อกต่อกันเป็นลูกโซ่ร่วมกับการเก็บข้อมูลแบบกระจายศูนย์ (Decentralized) จึงตรวจสอบความถูกต้องได้โปร่งใส'
+      },
+      {
+        id: 'H5',
+        topic: 'สิ่งแวดล้อมและชีววิทยา',
+        difficulty: 3,
+        question: 'เป้าหมายด้านสิ่งแวดล้อม "Carbon Neutrality" แตกต่างจาก "Net Zero" ในประเด็นสำคัญข้อใด?',
+        options: ['Carbon Neutrality เน้นลดและชดเชยเฉพาะคาร์บอนไดออกไซด์ ส่วน Net Zero ครอบคลุมแก๊สเรือนกระจกทุกชนิด', 'Net Zero ใช้เฉพาะในภาคเกษตรกรรมเท่านั้น', 'Carbon Neutrality ห้ามปลูกป่าเพื่อชดเชยคาร์บอนโดยเด็ดขาด', 'ทั้งสองคำมีความหมายเหมือนกันทุกประการไม่มีความแตกต่าง'],
+        correctIndex: 0,
+        hint: 'สังเกตคำว่า "Carbon" ที่เจาะจงคาร์บอนไดออกไซด์ เทียบกับ "Net Zero" ที่รวมแก๊สมีเทน ไนตรัสออกไซด์ และแก๊สเรือนกระจกอื่น ๆ ด้วย',
+        explanation: 'Carbon Neutrality คือการสร้างสมดุลการปล่อยและดูดกลับเฉพาะ CO₂ ขณะที่ Net Zero คือการทำให้การปล่อยแก๊สเรือนกระจกสุทธิทุกชนิดเป็นศูนย์'
+      },
+      {
+        id: 'H6',
+        topic: 'สิ่งแวดล้อมและชีววิทยา',
+        difficulty: 3,
+        question: 'ออร์แกเนลล์ใดภายในเซลล์ยูคาริโอตทำหน้าที่เป็น "โรงไฟฟ้าของเซลล์" สร้างพลังงานหลักในรูปสาร ATP?',
+        options: ['ไรโบโซม (Ribosome)', 'ไมโทคอนเดรีย (Mitochondria)', 'กอลจิบอดี (Golgi Apparatus)', 'ไลโซโซม (Lysosome)'],
+        correctIndex: 1,
+        hint: 'ออร์แกเนลล์นี้มีเยื่อหุ้ม 2 ชั้น มีสารพันธุกรรม DNA เป็นของตัวเอง และเกิดกระบวนการหายใจระดับเซลล์ที่นี่',
+        explanation: 'ไมโทคอนเดรีย (Mitochondria) เป็นแหล่งสร้างพลังงานหลักของเซลล์ผ่านกระบวนการหายใจระดับเซลล์ เพื่อผลิตสารพลังงานสูง ATP ให้เซลล์นำไปใช้'
+      }
+    ];
+
+    /**
+     * 3. สถานะของเกม (Game State)
+     */
+    const TOTAL_QUESTIONS = 10;
+    const QUESTION_TIME_LIMIT = 25;
+
+    let gameState = {
+      playerName: 'ผู้เรียนทดสอบ',
+      timerEnabled: true,
+      currentQuestionNum: 1,
+      currentDifficulty: 2, // เริ่มต้นที่ระดับปานกลาง (1=ง่าย, 2=ปานกลาง, 3=ยาก)
+      consecutiveCorrect: 0,
+      streak: 0,
+      maxStreak: 0,
+      scoreXP: 0,
+      hintsRemaining: 3,
+      fiftyRemaining: 2,
+      hintUsedThisTurn: false,
+      usedQuestionIds: new Set(),
+      currentQuestion: null,
+      isAnswered: false,
+      timerInterval: null,
+      timeLeft: QUESTION_TIME_LIMIT,
+      history: [] // เก็บประวัติทุกข้อเพื่อสร้างกราฟและวิเคราะห์การเรียนรู้
+    };
+
+    /**
+     * 4. ฟังก์ชันจัดการการตั้งค่าและหน้าจอ (Navigation & Settings)
+     */
+    function toggleSound(forcedState = null) {
+      if (typeof forcedState === 'boolean') {
+        sfx.enabled = forcedState;
+      } else {
+        sfx.enabled = !sfx.enabled;
+      }
+      
+      // ซิงก์ไอคอนและสวิตช์ทั้งหมด
+      const startToggle = document.getElementById('soundToggleStart');
+      if (startToggle) startToggle.checked = sfx.enabled;
+      
+      document.getElementById('soundOnIcon').classList.toggle('hidden', !sfx.enabled);
+      document.getElementById('soundOffIcon').classList.toggle('hidden', sfx.enabled);
+      
+      if (sfx.enabled) sfx.click();
+    }
+
+    function updateTimerSetting(isChecked) {
+      gameState.timerEnabled = isChecked;
+      sfx.click();
+    }
+
+    function confirmReturnHome() {
+      const quizVisible = !document.getElementById('quizScreen').classList.contains('hidden');
+      if (quizVisible) {
+        sfx.click();
+        document.getElementById('confirmModal').classList.remove('hidden');
+      } else {
+        goHomeNow();
+      }
+    }
+
+    function closeConfirmModal() {
+      sfx.click();
+      document.getElementById('confirmModal').classList.add('hidden');
+    }
+
+    function goHomeNow() {
+      clearInterval(gameState.timerInterval);
+      document.getElementById('confirmModal').classList.add('hidden');
+      document.getElementById('quizScreen').classList.add('hidden');
+      document.getElementById('resultScreen').classList.add('hidden');
+      document.getElementById('startScreen').classList.remove('hidden');
+    }
+
+    /**
+     * 5. เริ่มเกมใหม่ (Initialize & Start Game)
+     */
+    function startGame() {
+      sfx.init();
+      sfx.levelUp();
+
+      const rawName = document.getElementById('playerNameInput').value.trim();
+      gameState = {
+        playerName: rawName || 'ผู้เรียนทดสอบ',
+        timerEnabled: document.getElementById('timerToggle').checked,
+        currentQuestionNum: 1,
+        currentDifficulty: 2, // เริ่มระดับปานกลางเสมอตามหลัก Adaptive Assessment
+        consecutiveCorrect: 0,
+        streak: 0,
+        maxStreak: 0,
+        scoreXP: 0,
+        hintsRemaining: 3,
+        fiftyRemaining: 2,
+        hintUsedThisTurn: false,
+        usedQuestionIds: new Set(),
+        currentQuestion: null,
+        isAnswered: false,
+        timerInterval: null,
+        timeLeft: QUESTION_TIME_LIMIT,
+        history: []
+      };
+
+      // อัปเดต HUD เริ่มต้น
+      document.getElementById('hudPlayerName').textContent = gameState.playerName;
+      document.getElementById('hudScore').textContent = '0';
+      document.getElementById('streakBadge').classList.add('hidden');
+      
+      updateAdaptiveBanner(
+        '🤖',
+        'ระบบเริ่มต้นประเมินผลที่ <strong>ระดับปานกลาง (Lv.2)</strong> เพื่อปรับความยากตามศักยภาพของคุณ',
+        'indigo'
+      );
+
+      // สลับหน้าจอ
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('resultScreen').classList.add('hidden');
+      document.getElementById('quizScreen').classList.remove('hidden');
+
+      renderProgressSegments();
+      loadNextQuestion();
+    }
+
+    /**
+     * 6. ระบบเลือกคำถามตามระดับความยากอัตโนมัติ (Adaptive Question Selector)
+     */
+    function pickAdaptiveQuestion(targetDifficulty) {
+      // กรองข้อที่ยังไม่เคยถูกถามในระดับความยากเป้าหมาย
+      let candidates = QUESTION_BANK.filter(
+        q => q.difficulty === targetDifficulty && !gameState.usedQuestionIds.has(q.id)
+      );
+
+      // ระบบสำรองอัจฉริยะ (Fallback): หากข้อสอบระดับนั้นถูกใช้ครบแล้ว ให้ดึงระดับที่ใกล้เคียงที่สุดแทน
+      if (candidates.length === 0) {
+        const fallbackOrder = targetDifficulty === 3 ? [2, 1] : targetDifficulty === 1 ? [2, 3] : [3, 1];
+        for (const lvl of fallbackOrder) {
+          candidates = QUESTION_BANK.filter(
+            q => q.difficulty === lvl && !gameState.usedQuestionIds.has(q.id)
+          );
+          if (candidates.length > 0) break;
+        }
+      }
+
+      // สุ่มเลือก 1 ข้อจากกลุ่มผู้สมัคร
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+      gameState.usedQuestionIds.add(chosen.id);
+      return chosen;
+    }
+
+    /**
+     * 7. โหลดคำถามและแสดงผลบนหน้าจอ (Render Question)
+     */
+    function loadNextQuestion() {
+      clearInterval(gameState.timerInterval);
+      gameState.isAnswered = false;
+      gameState.hintUsedThisTurn = false;
+
+      const q = pickAdaptiveQuestion(gameState.currentDifficulty);
+      gameState.currentQuestion = q;
+
+      // อัปเดตเลขข้อและแถบความคืบหน้า
+      document.getElementById('hudQuestionNum').textContent = gameState.currentQuestionNum;
+      renderProgressSegments();
+
+      // อัปเดตป้ายระดับความยาก (ใช้ระดับจริงของข้อคำถามที่แสดง)
+      const actualDiff = q.difficulty;
+      const diffBadge = document.getElementById('difficultyBadge');
+      if (actualDiff === 1) {
+        diffBadge.className = 'px-3 py-1 rounded-full text-xs sm:text-sm font-heading font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5';
+        diffBadge.innerHTML = '<span>🌱 ระดับง่าย (Lv.1)</span><span class="text-[11px] opacity-80">+100 XP</span>';
+      } else if (actualDiff === 2) {
+        diffBadge.className = 'px-3 py-1 rounded-full text-xs sm:text-sm font-heading font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5';
+        diffBadge.innerHTML = '<span>⚡ ระดับปานกลาง (Lv.2)</span><span class="text-[11px] opacity-80">+200 XP</span>';
+      } else {
+        diffBadge.className = 'px-3 py-1 rounded-full text-xs sm:text-sm font-heading font-bold bg-purple-100 text-purple-800 border border-purple-300 flex items-center gap-1.5';
+        diffBadge.innerHTML = '<span>🔥 ระดับยาก (Lv.3)</span><span class="text-[11px] opacity-80">+300 XP</span>';
+      }
+
+      // อัปเดตป้ายหมวดวิชา
+      const topicIcons = {
+        'วิทยาศาสตร์และดาราศาสตร์': '🔭',
+        'เทคโนโลยีดิจิทัลและ AI': '💻',
+        'สิ่งแวดล้อมและชีววิทยา': '🌿'
+      };
+      document.getElementById('topicBadge').textContent = `${topicIcons[q.topic] || '📘'} ${q.topic}`;
+
+      // แสดงข้อความคำถาม
+      const qTextEl = document.getElementById('questionText');
+      qTextEl.textContent = `${gameState.currentQuestionNum}. ${q.question}`;
+
+      // รีเซ็ตปุ่มตัวช่วย
+      const hintBtn = document.getElementById('hintBtn');
+      const fiftyBtn = document.getElementById('fiftyBtn');
+      document.getElementById('hintCountBadge').textContent = gameState.hintsRemaining;
+      document.getElementById('fiftyCountBadge').textContent = gameState.fiftyRemaining;
+      hintBtn.disabled = gameState.hintsRemaining <= 0;
+      fiftyBtn.disabled = gameState.fiftyRemaining <= 0;
+
+      // ซ่อนกล่องคำใบ้และกล่องเฉลยจากข้อก่อนหน้า
+      document.getElementById('hintBox').classList.add('hidden');
+      document.getElementById('feedbackBox').classList.add('hidden');
+
+      // สร้างปุ่มตัวเลือก 4 ข้อ
+      const optionsContainer = document.getElementById('optionsContainer');
+      optionsContainer.innerHTML = '';
+      const thaiLetters = ['ก', 'ข', 'ค', 'ง'];
+
+      q.options.forEach((optText, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.index = idx;
+        btn.onclick = () => handleAnswer(idx);
+        btn.className = 'option-btn w-full text-left p-4 rounded-2xl bg-slate-50 hover:bg-indigo-50/80 border-2 border-slate-200 hover:border-indigo-400 flex items-center gap-3.5 group';
+        btn.innerHTML = `
+          <span class="w-9 h-9 rounded-xl bg-white border border-slate-300 group-hover:border-indigo-500 group-hover:bg-indigo-600 group-hover:text-white font-heading font-bold text-slate-700 flex items-center justify-center shrink-0 transition">
+            ${thaiLetters[idx]}
+          </span>
+          <span class="text-slate-800 font-medium text-sm sm:text-base leading-snug flex-1">${optText}</span>
+        `;
+        optionsContainer.appendChild(btn);
+      });
+
+      // จัดการตัวจับเวลา (หากเปิดโหมดจับเวลา)
+      const timerContainer = document.getElementById('timerBarContainer');
+      const timerTextBadge = document.getElementById('timerTextBadge');
+      if (gameState.timerEnabled) {
+        timerContainer.classList.remove('hidden');
+        timerTextBadge.classList.remove('hidden');
+        startQuestionTimer();
+      } else {
+        timerContainer.classList.add('hidden');
+        timerTextBadge.classList.add('hidden');
+      }
+    }
+
+    function startQuestionTimer() {
+      gameState.timeLeft = QUESTION_TIME_LIMIT;
+      const fill = document.getElementById('timerBarFill');
+      const secText = document.getElementById('timerSeconds');
+      
+      fill.style.transition = 'none';
+      fill.style.width = '100%';
+      secText.textContent = gameState.timeLeft;
+      
+      // บังคับ Reflow เพื่อให้ CSS transition ทำงานลื่นไหล
+      void fill.offsetWidth;
+      fill.style.transition = 'width 1s linear';
+
+      gameState.timerInterval = setInterval(() => {
+        gameState.timeLeft--;
+        secText.textContent = Math.max(0, gameState.timeLeft);
+        const pct = (Math.max(0, gameState.timeLeft) / QUESTION_TIME_LIMIT) * 100;
+        fill.style.width = `${pct}%`;
+
+        if (gameState.timeLeft <= 5) {
+          document.getElementById('timerTextBadge').classList.add('bg-rose-100', 'text-rose-700');
+        } else {
+          document.getElementById('timerTextBadge').classList.remove('bg-rose-100', 'text-rose-700');
+        }
+
+        if (gameState.timeLeft <= 0) {
+          clearInterval(gameState.timerInterval);
+          handleAnswer(-1, true); // หมดเวลา
+        }
+      }, 1000);
+    }
+
+    /**
+     * 8. ตัวช่วยอัจฉริยะ: ขอคำใบ้ (Smart Hint) และ ตัดตัวเลือก 50:50
+     */
+    function useSmartHint() {
+      if (gameState.isAnswered || gameState.hintUsedThisTurn || gameState.hintsRemaining <= 0) return;
+      
+      sfx.hint();
+      gameState.hintsRemaining--;
+      gameState.hintUsedThisTurn = true;
+
+      document.getElementById('hintCountBadge').textContent = gameState.hintsRemaining;
+      document.getElementById('hintBtn').disabled = true;
+
+      document.getElementById('hintText').textContent = gameState.currentQuestion.hint;
+      document.getElementById('hintBox').classList.remove('hidden');
+    }
+
+    function useFiftyFifty() {
+      if (gameState.isAnswered || gameState.fiftyRemaining <= 0) return;
+      
+      sfx.hint();
+      gameState.fiftyRemaining--;
+      document.getElementById('fiftyCountBadge').textContent = gameState.fiftyRemaining;
+      document.getElementById('fiftyBtn').disabled = true;
+
+      const correctIdx = gameState.currentQuestion.correctIndex;
+      const wrongIndices = [0, 1, 2, 3].filter(i => i !== correctIdx);
+      // สุ่มตัดตัวเลือกที่ผิดออก 2 ข้อ
+      wrongIndices.sort(() => Math.random() - 0.5);
+      const toDisable = wrongIndices.slice(0, 2);
+
+      const buttons = document.querySelectorAll('#optionsContainer button');
+      toDisable.forEach(idx => {
+        const btn = buttons[idx];
+        btn.disabled = true;
+        btn.classList.add('opacity-35', 'line-through', 'bg-slate-100', 'cursor-not-allowed');
+        btn.classList.remove('hover:bg-indigo-50/80', 'hover:border-indigo-400');
+      });
+    }
+
+    /**
+     * 9. ตรวจคำตอบและคำนวณการปรับระดับความยาก (Core Adaptive Engine)
+     */
+    function handleAnswer(selectedIndex, isTimeout = false) {
+      if (gameState.isAnswered) return;
+      gameState.isAnswered = true;
+      clearInterval(gameState.timerInterval);
+
+      // ปิดการใช้งานปุ่มตัวช่วย
+      document.getElementById('hintBtn').disabled = true;
+      document.getElementById('fiftyBtn').disabled = true;
+
+      const q = gameState.currentQuestion;
+      const isCorrect = selectedIndex === q.correctIndex;
+      const buttons = document.querySelectorAll('#optionsContainer button');
+
+      // ไฮไลต์สีตัวเลือกที่ถูกและผิด
+      buttons.forEach((btn, idx) => {
+        btn.disabled = true;
+        const badge = btn.querySelector('span:first-child');
+        if (idx === q.correctIndex) {
+          btn.className = 'option-btn w-full text-left p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-500 flex items-center gap-3.5 shadow-sm';
+          badge.className = 'w-9 h-9 rounded-xl bg-emerald-600 text-white font-heading font-bold flex items-center justify-center shrink-0';
+          badge.textContent = '✓';
+        } else if (idx === selectedIndex && !isCorrect) {
+          btn.className = 'option-btn w-full text-left p-4 rounded-2xl bg-rose-50 border-2 border-rose-500 flex items-center gap-3.5 animate-shake';
+          badge.className = 'w-9 h-9 rounded-xl bg-rose-600 text-white font-heading font-bold flex items-center justify-center shrink-0';
+          badge.textContent = '✕';
+        } else {
+          btn.classList.add('opacity-55');
+        }
+      });
+
+      // คำนวณคะแนน XP และปรับระดับความยากสำหรับข้อถัดไป
+      let xpEarned = 0;
+      let adaptiveMessage = '';
+      let bannerType = 'indigo';
+      let bannerIcon = '🤖';
+      const prevDiff = gameState.currentDifficulty;
+
+      if (isCorrect) {
+        gameState.streak++;
+        if (gameState.streak > gameState.maxStreak) {
+          gameState.maxStreak = gameState.streak;
+        }
+        gameState.consecutiveCorrect++;
+
+        // คะแนนฐานตามระดับความยาก + โบนัสคอมโบ - หักเล็กน้อยหากใช้คำใบ้
+        const baseXP = q.difficulty * 100;
+        const comboBonus = (gameState.streak - 1) * 20;
+        const hintDeduction = gameState.hintUsedThisTurn ? 30 : 0;
+        xpEarned = Math.max(50, baseXP + comboBonus - hintDeduction);
+        gameState.scoreXP += xpEarned;
+
+        // กฎการเลื่อนระดับความยาก (Adaptive Promotion Rules)
+        if (gameState.currentDifficulty === 1 && gameState.consecutiveCorrect >= 1) {
+          gameState.currentDifficulty = 2;
+          gameState.consecutiveCorrect = 0;
+          adaptiveMessage = '🚀 ยอดเยี่ยม! ตอบถูกแล้ว ระบบปรับระดับความยากขึ้นเป็น: <strong>ระดับปานกลาง (Lv.2)</strong>';
+          bannerType = 'emerald';
+          bannerIcon = '🚀';
+          sfx.levelUp();
+        } else if (gameState.currentDifficulty === 2 && gameState.consecutiveCorrect >= 2) {
+          gameState.currentDifficulty = 3;
+          gameState.consecutiveCorrect = 0;
+          adaptiveMessage = '🔥 ตอบถูกต่อเนื่อง 2 ข้อ! AI ปรับระดับความยากขึ้นสู่: <strong>ระดับยาก (Lv.3)</strong>';
+          bannerType = 'purple';
+          bannerIcon = '🔥';
+          sfx.levelUp();
+        } else if (gameState.currentDifficulty === 2 && gameState.consecutiveCorrect === 1) {
+          adaptiveMessage = '✨ ยอดเยี่ยม! ตอบถูกอีก 1 ข้อติดกัน ระบบจะเลื่อนระดับสู่ <strong>ระดับยาก (Lv.3)</strong>';
+          bannerType = 'emerald';
+          bannerIcon = '✨';
+          sfx.correct();
+        } else {
+          adaptiveMessage = '👑 สุดยอด! คุณรักษามาตรฐานใน <strong>ระดับยากสูงสุด (Lv.3)</strong> ได้อย่างยอดเยี่ยม';
+          bannerType = 'purple';
+          bannerIcon = '👑';
+          sfx.correct();
+        }
+      } else {
+        // ตอบผิดหรือหมดเวลา: รีเซ็ตคอมโบ และลดระดับความยากลง 1 ขั้นเพื่อประคองผู้เรียน
+        gameState.streak = 0;
+        gameState.consecutiveCorrect = 0;
+        sfx.wrong();
+
+        if (gameState.currentDifficulty === 3) {
+          gameState.currentDifficulty = 2;
+          adaptiveMessage = '🌱 ระบบปรับลดระดับความยากลงเป็น: <strong>ระดับปานกลาง (Lv.2)</strong> เพื่อทบทวนความเข้าใจ';
+          bannerType = 'amber';
+          bannerIcon = '🌱';
+        } else if (gameState.currentDifficulty === 2) {
+          gameState.currentDifficulty = 1;
+          adaptiveMessage = '🌱 ระบบปรับลดระดับความยากลงเป็น: <strong>ระดับง่าย (Lv.1)</strong> เพื่อปูพื้นฐานให้แม่นยำขึ้น';
+          bannerType = 'amber';
+          bannerIcon = '🌱';
+        } else {
+          adaptiveMessage = '💡 ไม่เป็นไร! ลองอ่านคำอธิบายด้านล่างและใช้ปุ่ม "ขอคำใบ้" ในข้อถัดไปนะ';
+          bannerType = 'amber';
+          bannerIcon = '💡';
+        }
+      }
+
+      // บันทึกประวัติข้อนี้ลงใน History
+      gameState.history.push({
+        qNum: gameState.currentQuestionNum,
+        questionObj: q,
+        difficultyPlayed: q.difficulty,
+        selectedIndex,
+        isCorrect,
+        isTimeout,
+        xpEarned,
+        hintUsed: gameState.hintUsedThisTurn
+      });
+
+      // อัปเดต HUD คะแนนและคอมโบ
+      document.getElementById('hudScore').textContent = gameState.scoreXP.toLocaleString();
+      const streakBadge = document.getElementById('streakBadge');
+      if (gameState.streak >= 2) {
+        streakBadge.classList.remove('hidden');
+        document.getElementById('hudStreak').textContent = gameState.streak;
+      } else {
+        streakBadge.classList.add('hidden');
+      }
+
+      renderProgressSegments();
+
+      // แสดงแถบสถานะ Adaptive ด้านบน
+      if (gameState.currentQuestionNum < TOTAL_QUESTIONS) {
+        updateAdaptiveBanner(bannerIcon, adaptiveMessage, bannerType);
+      } else {
+        updateAdaptiveBanner('🏁', 'ครบทั้ง 10 ข้อแล้ว! กดปุ่มด้านล่างเพื่อดูรายงานวิเคราะห์การเรียนรู้ของคุณ', 'emerald');
+      }
+
+      // แสดงกล่องเฉลยและคำอธิบายทันที (Instant Smart Feedback)
+      const feedbackBox = document.getElementById('feedbackBox');
+      const feedbackHeader = document.getElementById('feedbackHeader');
+      const xpEarnedBadge = document.getElementById('xpEarnedBadge');
+      const nextStepHint = document.getElementById('nextStepHint');
+
+      feedbackBox.classList.remove('hidden', 'bg-emerald-50/90', 'border-emerald-300', 'bg-rose-50/90', 'border-rose-300');
+      
+      if (isCorrect) {
+        feedbackBox.classList.add('bg-emerald-50/90', 'border-emerald-300');
+        feedbackHeader.className = 'font-heading font-bold text-base sm:text-lg flex items-center gap-2 text-emerald-800';
+        feedbackHeader.innerHTML = '<span>🎉 ถูกต้อง! ยอดเยี่ยมมาก</span>';
+        xpEarnedBadge.className = 'inline-block px-3 py-1 rounded-full text-xs font-heading font-bold bg-emerald-200 text-emerald-900';
+        xpEarnedBadge.textContent = `+${xpEarned} XP`;
+      } else {
+        feedbackBox.classList.add('bg-rose-50/90', 'border-rose-300');
+        feedbackHeader.className = 'font-heading font-bold text-base sm:text-lg flex items-center gap-2 text-rose-800';
+        feedbackHeader.innerHTML = isTimeout 
+          ? '<span>⏰ หมดเวลา! มาดูเฉลยกัน</span>' 
+          : '<span>📘 ยังไม่ถูก ไม่เป็นไร มาเรียนรู้ไปด้วยกัน!</span>';
+        xpEarnedBadge.className = 'inline-block px-3 py-1 rounded-full text-xs font-heading font-bold bg-rose-200 text-rose-900';
+        xpEarnedBadge.textContent = '+0 XP';
+      }
+
+      document.getElementById('explanationText').innerHTML = `<strong>คำอธิบายเสริมความเข้าใจ:</strong> ${q.explanation}`;
+
+      if (gameState.currentQuestionNum < TOTAL_QUESTIONS) {
+        nextStepHint.innerHTML = `<span>${bannerIcon}</span><span>${adaptiveMessage}</span>`;
+        document.getElementById('nextBtnLabel').textContent = 'ข้อถัดไป (Next Question)';
+      } else {
+        nextStepHint.innerHTML = '<span>📊</span><span>ประมวลผลข้อมูลการตอบครบ 10 ข้อเรียบร้อย พร้อมแสดงกราฟวิเคราะห์ผล</span>';
+        document.getElementById('nextBtnLabel').textContent = 'ดูรายงานวิเคราะห์การเรียนรู้ (See Analytics)';
+      }
+    }
+
+    function updateAdaptiveBanner(icon, htmlText, colorTheme) {
+      const banner = document.getElementById('adaptiveBanner');
+      const themes = {
+        indigo: 'bg-indigo-950/90 border-indigo-400/30 text-indigo-100',
+        emerald: 'bg-emerald-950/90 border-emerald-400/40 text-emerald-100',
+        purple: 'bg-purple-950/90 border-purple-400/40 text-purple-100',
+        amber: 'bg-amber-950/90 border-amber-400/40 text-amber-100'
+      };
+      banner.className = `rounded-2xl px-4 py-3 border text-xs sm:text-sm font-heading flex items-center gap-2.5 shadow-lg transition-all ${themes[colorTheme] || themes.indigo}`;
+      document.getElementById('adaptiveBannerIcon').textContent = icon;
+      document.getElementById('adaptiveBannerText').innerHTML = htmlText;
+    }
+
+    function renderProgressSegments() {
+      const container = document.getElementById('progressSegments');
+      container.innerHTML = '';
+      for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
+        const seg = document.createElement('div');
+        const record = gameState.history.find(h => h.qNum === i);
+        let colorClass = 'bg-white/20';
+        if (record) {
+          colorClass = record.isCorrect ? 'bg-emerald-400' : 'bg-rose-400';
+        } else if (i === gameState.currentQuestionNum) {
+          colorClass = 'bg-amber-400 animate-pulse';
+        }
+        seg.className = `h-2 flex-1 rounded-full transition-all ${colorClass}`;
+        container.appendChild(seg);
+      }
+    }
+
+    /**
+     * 10. ไปยังข้อถัดไป หรือ เปิดหน้าสรุปผลวิเคราะห์การเรียนรู้
+     */
+    function nextQuestion() {
+      sfx.click();
+      if (gameState.currentQuestionNum < TOTAL_QUESTIONS) {
+        gameState.currentQuestionNum++;
+        loadNextQuestion();
+      } else {
+        showLearningAnalytics();
+      }
+    }
+
+    /**
+     * 11. หน้าสรุปผลวิเคราะห์การเรียนรู้ (Learning Analytics Dashboard)
+     */
+    function showLearningAnalytics() {
+      sfx.finish();
+      document.getElementById('quizScreen').classList.add('hidden');
+      document.getElementById('resultScreen').classList.remove('hidden');
+
+      const totalCorrect = gameState.history.filter(h => h.isCorrect).length;
+      const accuracy = Math.round((totalCorrect / TOTAL_QUESTIONS) * 100);
+      const hintsUsed = 3 - gameState.hintsRemaining;
+
+      document.getElementById('resultPlayerName').textContent = gameState.playerName;
+      document.getElementById('statTotalXP').textContent = `${gameState.scoreXP.toLocaleString()} XP`;
+      document.getElementById('statAccuracy').textContent = `${accuracy}%`;
+      document.getElementById('statCorrectFraction').textContent = `ตอบถูก ${totalCorrect}/${TOTAL_QUESTIONS} ข้อ`;
+      document.getElementById('statMaxStreak').textContent = `${gameState.maxStreak} ข้อ`;
+      document.getElementById('statHintsUsed').textContent = `${hintsUsed} / 3 ครั้ง`;
+
+      // ประเมินระดับความเชี่ยวชาญรวม
+      const rankBadge = document.getElementById('rankBadge');
+      const reachedHard = gameState.history.some(h => h.difficultyPlayed === 3 && h.isCorrect);
+      if (accuracy >= 80 && reachedHard) {
+        rankBadge.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-100 text-purple-800 font-heading font-bold text-xs sm:text-sm mb-3';
+        rankBadge.textContent = '👑 ระดับผลการเรียนรู้: นักเรียนรู้ระดับอัจฉริยะ (Adaptive Master)';
+      } else if (accuracy >= 60) {
+        rankBadge.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-100 text-emerald-800 font-heading font-bold text-xs sm:text-sm mb-3';
+        rankBadge.textContent = '🌟 ระดับผลการเรียนรู้: ผู้เรียนยอดเยี่ยม (Proficient Learner)';
+      } else {
+        rankBadge.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-100 text-amber-800 font-heading font-bold text-xs sm:text-sm mb-3';
+        rankBadge.textContent = '🌱 ระดับผลการเรียนรู้: ผู้เรียนกำลังพัฒนา (Rising Learner)';
+      }
+
+      renderTrajectoryChart();
+      renderTopicMasteryAndAIAdvice();
+    }
+
+    /**
+     * วาดกราฟเส้นทางการปรับระดับความยาก SVG (Adaptive Difficulty Trajectory Chart)
+     */
+    function renderTrajectoryChart() {
+      const svg = document.getElementById('trajectorySvg');
+      const yMap = { 3: 45, 2: 105, 1: 165 };
+      const startX = 95;
+      const stepX = 56;
+
+      let svgContent = `
+        <defs>
+          <linearGradient id="trajGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#6366f1" stop-opacity="0.28" />
+            <stop offset="100%" stop-color="#6366f1" stop-opacity="0.0" />
+          </linearGradient>
+        </defs>
+
+        <!-- เส้นระดับแกน Y -->
+        <line x1="75" y1="45" x2="615" y2="45" stroke="#cbd5e1" stroke-dasharray="4 4" stroke-width="1.2" />
+        <line x1="75" y1="105" x2="615" y2="105" stroke="#cbd5e1" stroke-dasharray="4 4" stroke-width="1.2" />
+        <line x1="75" y1="165" x2="615" y2="165" stroke="#cbd5e1" stroke-dasharray="4 4" stroke-width="1.2" />
+
+        <!-- ป้ายชื่อแกน Y -->
+        <text x="68" y="49" text-anchor="end" font-family="Prompt" font-size="11" font-weight="600" fill="#7e22ce">ยาก (Lv.3)</text>
+        <text x="68" y="109" text-anchor="end" font-family="Prompt" font-size="11" font-weight="600" fill="#b45309">กลาง (Lv.2)</text>
+        <text x="68" y="169" text-anchor="end" font-family="Prompt" font-size="11" font-weight="600" fill="#047857">ง่าย (Lv.1)</text>
+      `;
+
+      const points = gameState.history.map((item, idx) => ({
+        x: startX + idx * stepX,
+        y: yMap[item.difficultyPlayed],
+        item
+      }));
+
+      // พื้นที่ใต้กราฟ (Polygon)
+      if (points.length > 1) {
+        const polyPoints = [
+          `${points[0].x},180`,
+          ...points.map(p => `${p.x},${p.y}`),
+          `${points[points.length - 1].x},180`
+        ].join(' ');
+        svgContent += `<polygon points="${polyPoints}" fill="url(#trajGrad)" />`;
+
+        // เส้นเชื่อมจุด
+        const linePoints = points.map(p => `${p.x},${p.y}`).join(' ');
+        svgContent += `<polyline points="${linePoints}" fill="none" stroke="#4f46e5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`;
+      }
+
+      // จุดข้อมูลแต่ละข้อ (Interactive Nodes)
+      points.forEach((pt, idx) => {
+        const fill = pt.item.isCorrect ? '#10b981' : '#f43f5e';
+        svgContent += `
+          <g class="cursor-pointer" onclick="inspectChartNode(${idx})" onmouseenter="inspectChartNode(${idx})">
+            <circle cx="${pt.x}" cy="${pt.y}" r="14" fill="${fill}" fill-opacity="0.18" />
+            <circle cx="${pt.x}" cy="${pt.y}" r="9" fill="${fill}" stroke="#ffffff" stroke-width="2.5" />
+            <text x="${pt.x}" y="196" text-anchor="middle" font-family="Prompt" font-size="11" font-weight="600" fill="#475569">ข้อ ${pt.item.qNum}</text>
+          </g>
+        `;
+      });
+
+      svg.innerHTML = svgContent;
+      // แสดงรายละเอียดข้อแรกเป็นค่าเริ่มต้น
+      if (points.length > 0) inspectChartNode(0);
+    }
+
+    function inspectChartNode(idx) {
+      const h = gameState.history[idx];
+      if (!h) return;
+      const diffNames = { 1: 'ระดับง่าย (Lv.1)', 2: 'ระดับปานกลาง (Lv.2)', 3: 'ระดับยาก (Lv.3)' };
+      const statusHtml = h.isCorrect
+        ? '<span class="text-emerald-600 font-bold">✓ ตอบถูก</span>'
+        : '<span class="text-rose-600 font-bold">✕ ตอบผิด</span>';
+      const hintTag = h.hintUsed ? ' • <span class="text-amber-600 font-medium">💡 ใช้คำใบ้</span>' : '';
+
+      document.getElementById('chartNodeDetail').innerHTML = `
+        <div>
+          <span class="font-heading font-bold text-indigo-700">ข้อที่ ${h.qNum}:</span> 
+          <span class="font-medium">${h.questionObj.topic}</span> 
+          <span class="text-slate-500">(${diffNames[h.difficultyPlayed]})</span>${hintTag}
+        </div>
+        <div class="shrink-0 ml-2">${statusHtml} (+${h.xpEarned} XP)</div>
+      `;
+    }
+
+    /**
+     * วิเคราะห์ความเข้าใจรายหัวข้อและสร้างคำแนะนำเฉพาะบุคคล
+     */
+    function renderTopicMasteryAndAIAdvice() {
+      const topics = [
+        'วิทยาศาสตร์และดาราศาสตร์',
+        'เทคโนโลยีดิจิทัลและ AI',
+        'สิ่งแวดล้อมและชีววิทยา'
+      ];
+
+      const listContainer = document.getElementById('topicMasteryList');
+      listContainer.innerHTML = '';
+
+      const topicStats = topics.map(topic => {
+        const items = gameState.history.filter(h => h.questionObj.topic === topic);
+        const correctCount = items.filter(h => h.isCorrect).length;
+        const pct = items.length > 0 ? Math.round((correctCount / items.length) * 100) : 0;
+        return { topic, total: items.length, correct: correctCount, pct };
+      });
+
+      topicStats.forEach(stat => {
+        let barColor = 'bg-emerald-500';
+        let labelColor = 'text-emerald-700';
+        if (stat.total === 0) {
+          barColor = 'bg-slate-300';
+          labelColor = 'text-slate-500';
+        } else if (stat.pct < 50) {
+          barColor = 'bg-rose-500';
+          labelColor = 'text-rose-700';
+        } else if (stat.pct < 80) {
+          barColor = 'bg-amber-500';
+          labelColor = 'text-amber-700';
+        }
+
+        const displayScore = stat.total > 0 ? `${stat.pct}% (${stat.correct}/${stat.total} ข้อ)` : 'ยังไม่มีข้อสอบในรอบนี้';
+
+        listContainer.innerHTML += `
+          <div>
+            <div class="flex justify-between items-center text-xs sm:text-sm font-heading mb-1.5">
+              <span class="font-semibold text-slate-800">${stat.topic}</span>
+              <span class="font-bold ${labelColor}">${displayScore}</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full ${barColor} rounded-full transition-all duration-700" style="width: ${stat.total > 0 ? stat.pct : 0}%"></div>
+            </div>
+          </div>
+        `;
+      });
+
+      // สร้างคำแนะนำเฉพาะบุคคล (AI Study Advice)
+      const testedTopics = topicStats.filter(t => t.total > 0);
+      testedTopics.sort((a, b) => b.pct - a.pct);
+
+      const strongest = testedTopics[0];
+      const weakest = testedTopics[testedTopics.length - 1];
+      const missedQuestions = gameState.history.filter(h => !h.isCorrect);
+
+      let adviceHtml = '';
+      if (strongest && strongest.pct >= 70) {
+        adviceHtml += `<p>✅ <strong>จุดแข็งของคุณ:</strong> คุณทำผลงานได้ดีเด่นในสาระ <strong>"${strongest.topic}"</strong> (ความแม่นยำ ${strongest.pct}%) แสดงถึงความเข้าใจเชิงแนวคิดที่แม่นยำ</p>`;
+      }
+
+      if (weakest && weakest.pct < 70) {
+        adviceHtml += `<p>📌 <strong>ประเด็นที่ควรทบทวนเพิ่มเติม:</strong> แนะนำให้ทบทวนเนื้อหาในสาระ <strong>"${weakest.topic}"</strong> เพิ่มเติม โดยเน้นทำความเข้าใจเหตุผลเบื้องหลังปรากฏการณ์และกลไกสำคัญ</p>`;
+      } else {
+        adviceHtml += `<p>🌟 <strong>ภาพรวมยอดเยี่ยม:</strong> คุณมีความสมดุลในการเรียนรู้ครบทุกสาระ สามารถท้าทายตัวเองต่อในระดับความยากสูงสุดได้ทันที</p>`;
+      }
+
+      if (missedQuestions.length > 0) {
+        const sampleMissed = missedQuestions[0].questionObj;
+        adviceHtml += `<p class="text-xs bg-white/80 p-2.5 rounded-xl border border-indigo-100 text-slate-600">💡 <strong>จุดทบทวนด่วน:</strong> ลองทบทวนเรื่อง <em>"${sampleMissed.question.slice(0, 55)}..."</em> จากคลังข้อสอบด้านล่าง</p>`;
+      }
+
+      document.getElementById('aiRecommendationText').innerHTML = adviceHtml;
+    }
+
+    /**
+     * 12. ระบบ Modal คลังข้อสอบสำหรับผู้สอนและกรรมการประเมิน (Teacher View)
+     */
+    function openTeacherModal() {
+      sfx.click();
+      document.getElementById('teacherModal').classList.remove('hidden');
+      renderTeacherBank('all');
+    }
+
+    function closeTeacherModal() {
+      sfx.click();
+      document.getElementById('teacherModal').classList.add('hidden');
+    }
+
+    function renderTeacherBank(filterLevel) {
+      // อัปเดตสถานะปุ่ม Tab
+      document.querySelectorAll('.filter-tab').forEach(btn => {
+        const isMatch = String(btn.dataset.filter) === String(filterLevel);
+        btn.className = isMatch
+          ? 'filter-tab px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-heading font-semibold bg-indigo-600 text-white transition'
+          : 'filter-tab px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-heading font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+      });
+
+      const filtered = filterLevel === 'all'
+        ? QUESTION_BANK
+        : QUESTION_BANK.filter(q => q.difficulty === Number(filterLevel));
+
+      const container = document.getElementById('teacherBankList');
+      container.innerHTML = '';
+
+      const diffBadges = {
+        1: '<span class="px-2.5 py-0.5 rounded-full text-xs font-heading font-bold bg-emerald-100 text-emerald-800">🌱 ง่าย (Lv.1)</span>',
+        2: '<span class="px-2.5 py-0.5 rounded-full text-xs font-heading font-bold bg-amber-100 text-amber-800">⚡ ปานกลาง (Lv.2)</span>',
+        3: '<span class="px-2.5 py-0.5 rounded-full text-xs font-heading font-bold bg-purple-100 text-purple-800">🔥 ยาก (Lv.3)</span>'
+      };
+
+      filtered.forEach(q => {
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded-2xl bg-white border border-slate-200 shadow-sm';
+        card.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-2">
+              <span class="font-heading font-bold text-xs text-slate-400">#${q.id}</span>
+              ${diffBadges[q.difficulty]}
+              <span class="text-xs font-heading font-medium text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">${q.topic}</span>
+            </div>
+          </div>
+          <h4 class="font-bold text-slate-900 text-sm sm:text-base mb-2">${q.question}</h4>
+          <div class="text-xs sm:text-sm text-emerald-700 font-semibold mb-1.5">
+            ✓ เฉลย: ${q.options[q.correctIndex]}
+          </div>
+          <div class="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg mb-1.5">
+            💡 <strong>คำใบ้:</strong> ${q.hint}
+          </div>
+          <div class="text-xs text-slate-600">
+            📘 <strong>คำอธิบาย:</strong> ${q.explanation}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // รองรับการกดปุ่มคีย์บอร์ด 1-4 เพื่อตอบคำถาม และ Enter เพื่อไปข้อถัดไป
+    document.addEventListener('keydown', (e) => {
+      const quizVisible = !document.getElementById('quizScreen').classList.contains('hidden');
+      if (!quizVisible) return;
+
+      if (!gameState.isAnswered && ['1', '2', '3', '4'].includes(e.key)) {
+        const idx = Number(e.key) - 1;
+        const buttons = document.querySelectorAll('#optionsContainer button');
+        if (buttons[idx] && !buttons[idx].disabled) {
+          handleAnswer(idx);
+        }
+      } else if (gameState.isAnswered && e.key === 'Enter') {
+        nextQuestion();
+      }
+    });
+  </script>
+</body>
+</html>
